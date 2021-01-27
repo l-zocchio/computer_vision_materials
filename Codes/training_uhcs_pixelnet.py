@@ -9,14 +9,63 @@ from sklearn.model_selection import train_test_split
 import os
 import random
 import pickle
+import zipfile
+from pydrive.auth import GoogleAuth
+from pydrive.drive import GoogleDrive
 from DataLoad.data_utils import *
 from Model.Hypercolumn import *
 from Model.MultilayerPerceptron import *
+
+# Realizando a autorização para o Google Drive 
+# Garantir que os arquivo client_secrets.json e credentials.json existam
+# Configurações da autorização definidas no arquivo settings.yaml
+gauth = GoogleAuth()
+drive = GoogleDrive(gauth)
 
 
 # Selecionando a semente para gerar números pseudo-aleatórios
 random.seed(10)
 np.random.seed(10)
+
+"""
+Funções para zippar pasta com os resutados do treinamento
+"""
+# Declare the function to return all file paths of the particular directory
+def retrieve_file_paths(dirName):
+ 
+  # setup file paths variable
+  filePaths = []
+   
+  # Read all directory, subdirectories and file lists
+  for root, directories, files in os.walk(dirName):
+    for filename in files:
+        # Create the full filepath by using os module.
+        filePath = os.path.join(root, filename)
+        filePaths.append(filePath)
+         
+  # return all paths
+  return filePaths
+
+# Declare the main function
+def zipfolder(dir_name):
+
+   
+  # Call the function to retrieve all files and folders of the assigned directory
+  filePaths = retrieve_file_paths(dir_name)
+   
+  # printing the list of all files to be zipped
+  print('The following list of files will be zipped:')
+  for fileName in filePaths:
+    print(fileName)
+     
+  # writing files to a zipfile
+  zip_file = zipfile.ZipFile(dir_name+'.zip', 'w')
+  with zip_file:
+    # writing each file one by one
+    for file in filePaths:
+      zip_file.write(file)
+       
+  print(dir_name+'.zip file is created successfully!')
 
 """
 Carregando imagens de UltraHigh Carbon Steel Database
@@ -95,7 +144,7 @@ my_metrics = [
 ]
 pixelnet_model.compile(optimizer = opt, loss = loss_fn, metrics = my_metrics)
 
-path = ".\\saved_model"
+path = "saved_model"
 if not os.path.isdir(path):
     try:
         os.mkdir(path)
@@ -126,14 +175,39 @@ uchs_history = pixelnet_model.fit(
     callbacks = [checkpoint, early_stopping, learning_rate_scheduler]
 )
 
+# Save, zip and upload the results
 pixelnet_model.save(path, save_format='tf')
+zipfolder(path)
+with open(f"{path}.zip","r") as f:
+    file_drive = drive.CreateFile({'title':os.path.basename(f.name) })  
+    file_drive.SetContentString(f.read()) 
+    file_drive.Upload()
+
 with open("X_uhcs_train.pickle","wb") as f:
     pickle.dump(X_uhcs_train, f)
 with open("y_uhcs_train.pickle","wb") as f:
     pickle.dump(y_uhcs_train, f)
 with open("X_uhcs_test.pickle","wb") as f:
     pickle.dump(X_uhcs_test, f)
-with open("X_uhcs_test.pickle","wb") as f:
-    pickle.dump(X_uhcs_test, f)
+with open("y_uhcs_test.pickle","wb") as f:
+    pickle.dump(y_uhcs_test, f)
 
 pixelnet_model.evaluate(X_uhcs_test, y_uhcs_test)
+
+# Uploading files to GoogleDrive
+with open("X_uhcs_train.pickle","rb") as f:
+    file_drive = drive.CreateFile({'title':os.path.basename(f.name) })  
+    file_drive.SetContentString(f.read()) 
+    file_drive.Upload()
+with open("y_uhcs_train.pickle","rb") as f:
+    file_drive = drive.CreateFile({'title':os.path.basename(f.name) })  
+    file_drive.SetContentString(f.read()) 
+    file_drive.Upload()
+with open("X_uhcs_test.pickle","rb") as f:
+    file_drive = drive.CreateFile({'title':os.path.basename(f.name) })  
+    file_drive.SetContentString(f.read()) 
+    file_drive.Upload()
+with open("y_uhcs_test.pickle","rb") as f:
+    file_drive = drive.CreateFile({'title':os.path.basename(f.name) })  
+    file_drive.SetContentString(f.read()) 
+    file_drive.Upload()
